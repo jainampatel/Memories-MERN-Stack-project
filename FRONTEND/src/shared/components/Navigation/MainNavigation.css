@@ -12,18 +12,18 @@
 
 .main-navigation__menu-btn span {
   display: block;
-  width: 3rem;
+  width: 2.5rem;
   height: 2.5px;
-  background: white;
+  background: black;
 }
 
 .main-navigation__title {
-  color: white;
+  color: black;
 }
 
 .main-navigation__title a {
   text-decoration: none;
-  color: white;
+  color: black;
 }
 
 .main-navigation__header-nav {
