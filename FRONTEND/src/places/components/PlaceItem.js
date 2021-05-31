@@ -4,17 +4,17 @@ import Card from "../../shared/components/UIElements/Card";
 import Button from "../../shared/components/FormElements/Button";
 import Modal from "../../shared/components/UIElements/Modal";
 import Map from "../../shared/components/UIElements/Map";
+import ErrorModal from "../../shared/components/UIElements/ErrorModal";
+import LoadingSpinner from "../../shared/components/UIElements/LoadingSpinner";
 import { AuthContext } from "../../shared/context/auth-context";
 import { useHttpClient } from "../../shared/hooks/http-hook";
 import "./PlaceItem.css";
-import ErrorModal from "../../shared/components/UIElements/ErrorModal";
-import LoadingSpinner from "../../shared/components/UIElements/LoadingSpinner";
 
 const PlaceItem = (props) => {
+  const { isLoading, error, sendRequest, clearError } = useHttpClient();
   const auth = useContext(AuthContext);
   const [showMap, setShowMap] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const { isLoading, error, sendRequest, clearError } = useHttpClient();
 
   const openMapHandler = () => setShowMap(true);
 
@@ -35,10 +35,12 @@ const PlaceItem = (props) => {
         `http://localhost:5000/api/places/${props.id}`,
         "DELETE",
         null,
-        { Authorization: "Bearer " + auth.token }
+        {
+          Authorization: "Bearer " + auth.token,
+        }
       );
       props.onDelete(props.id);
-    } catch (error) {}
+    } catch (err) {}
   };
 
   return (
@@ -77,14 +79,9 @@ const PlaceItem = (props) => {
           can't be undone thereafter.
         </p>
       </Modal>
-
       <li className="place-item">
         <Card className="place-item__content">
-          {isLoading && (
-            <div className="center">
-              <LoadingSpinner asOverlay />
-            </div>
-          )}
+          {isLoading && <LoadingSpinner asOverlay />}
           <div className="place-item__image">
             <img
               src={`http://localhost:5000/${props.image}`}

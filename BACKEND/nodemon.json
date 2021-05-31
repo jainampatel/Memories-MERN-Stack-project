@@ -2,7 +2,7 @@
   "env": {
     "DB_USER": "jainam",
     "DB_PASSWORD": "jainam123",
-    "DB_NAME": "mern",
+    "DB_NAME": "mern_prod",
     "JWT_KEY": "mern_application_memories"
   }
 }

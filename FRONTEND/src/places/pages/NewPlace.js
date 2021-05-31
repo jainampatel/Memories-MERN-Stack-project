@@ -1,220 +1,104 @@
-const fs = require("fs");
+import React, { useContext } from "react";
+import { useHistory } from "react-router-dom";
 
-const { validationResult } = require("express-validator");
-const mongoose = require("mongoose");
+import Input from "../../shared/components/FormElements/Input";
+import Button from "../../shared/components/FormElements/Button";
+import ErrorModal from "../../shared/components/UIElements/ErrorModal";
+import LoadingSpinner from "../../shared/components/UIElements/LoadingSpinner";
+import ImageUpload from "../../shared/components/FormElements/ImageUpload";
+import {
+  VALIDATOR_REQUIRE,
+  VALIDATOR_MINLENGTH,
+} from "../../shared/util/validators";
+import { useForm } from "../../shared/hooks/form-hook";
+import { useHttpClient } from "../../shared/hooks/http-hook";
+import { AuthContext } from "../../shared/context/auth-context";
+import "./PlaceForm.css";
 
-const HttpError = require("../models/http-error");
-const getCoordsForAddress = require("../util/location");
-const Place = require("../models/place");
-const User = require("../models/user");
+const NewPlace = () => {
+  const auth = useContext(AuthContext);
+  const { isLoading, error, sendRequest, clearError } = useHttpClient();
+  const [formState, inputHandler] = useForm(
+    {
+      title: {
+        value: "",
+        isValid: false,
+      },
+      description: {
+        value: "",
+        isValid: false,
+      },
+      address: {
+        value: "",
+        isValid: false,
+      },
+      image: {
+        value: null,
+        isValid: false,
+      },
+    },
+    false
+  );
 
-const getPlaceById = async (req, res, next) => {
-  const placeId = req.params.pid;
+  const history = useHistory();
 
-  let place;
-  try {
-    place = await Place.findById(placeId);
-  } catch (err) {
-    const error = new HttpError(
-      "Something went wrong, could not find a place.",
-      500
-    );
-    return next(error);
-  }
+  const placeSubmitHandler = async (event) => {
+    event.preventDefault();
+    try {
+      const formData = new FormData();
+      formData.append("title", formState.inputs.title.value);
+      formData.append("description", formState.inputs.description.value);
+      formData.append("address", formState.inputs.address.value);
+      formData.append("creator", auth.userId);
+      formData.append("image", formState.inputs.image.value);
+      await sendRequest("http://localhost:5000/api/places", "POST", formData, {
+        Authorization: "Bearer " + auth.token,
+      });
+      history.push("/");
+    } catch (err) {}
+  };
 
-  if (!place) {
-    const error = new HttpError(
-      "Could not find place for the provided id.",
-      404
-    );
-    return next(error);
-  }
-
-  res.json({ place: place.toObject({ getters: true }) });
+  return (
+    <React.Fragment>
+      <ErrorModal error={error} onClear={clearError} />
+      <form className="place-form" onSubmit={placeSubmitHandler}>
+        {isLoading && <LoadingSpinner asOverlay />}
+        <Input
+          id="title"
+          element="input"
+          type="text"
+          label="Title"
+          validators={[VALIDATOR_REQUIRE()]}
+          errorText="Please enter a valid title."
+          onInput={inputHandler}
+        />
+        <Input
+          id="description"
+          element="textarea"
+          label="Description"
+          validators={[VALIDATOR_MINLENGTH(5)]}
+          errorText="Please enter a valid description (at least 5 characters)."
+          onInput={inputHandler}
+        />
+        <Input
+          id="address"
+          element="input"
+          label="Address"
+          validators={[VALIDATOR_REQUIRE()]}
+          errorText="Please enter a valid address."
+          onInput={inputHandler}
+        />
+        <ImageUpload
+          id="image"
+          onInput={inputHandler}
+          errorText="Please provide an image."
+        />
+        <Button type="submit" disabled={!formState.isValid}>
+          ADD PLACE
+        </Button>
+      </form>
+    </React.Fragment>
+  );
 };
 
-const getPlacesByUserId = async (req, res, next) => {
-  const userId = req.params.uid;
-
-  // let places;
-  let userWithPlaces;
-  try {
-    userWithPlaces = await User.findById(userId).populate("places");
-  } catch (err) {
-    const error = new HttpError(
-      "Fetching places failed, please try again later.",
-      500
-    );
-    return next(error);
-  }
-
-  // if (!places || places.length === 0) {
-  if (!userWithPlaces || userWithPlaces.places.length === 0) {
-    return next(
-      new HttpError("Could not find places for the provided user id.", 404)
-    );
-  }
-
-  res.json({
-    places: userWithPlaces.places.map((place) =>
-      place.toObject({ getters: true })
-    ),
-  });
-};
-
-const createPlace = async (req, res, next) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return next(
-      new HttpError("Invalid inputs passed, please check your data.", 422)
-    );
-  }
-
-  const { title, description, address } = req.body;
-
-  let coordinates;
-  try {
-    coordinates = await getCoordsForAddress(address);
-  } catch (error) {
-    return next(error);
-  }
-
-  const createdPlace = new Place({
-    title,
-    description,
-    address,
-    location: coordinates,
-    image: req.file.path,
-    creator: req.userData.userId,
-  });
-
-  let user;
-  try {
-    user = await User.findById(req.userData.userId);
-  } catch (err) {
-    const error = new HttpError(
-      "Creating place failed, please try again.",
-      500
-    );
-    return next(error);
-  }
-
-  if (!user) {
-    const error = new HttpError("Could not find user for provided id.", 404);
-    return next(error);
-  }
-
-  try {
-    const sess = await mongoose.startSession();
-    sess.startTransaction();
-    await createdPlace.save({ session: sess });
-    user.places.push(createdPlace);
-    await user.save({ session: sess });
-    await sess.commitTransaction();
-  } catch (err) {
-    const error = new HttpError(
-      "Creating place failed, please try again.",
-      500
-    );
-    return next(error);
-  }
-
-  res.status(201).json({ place: createdPlace });
-};
-
-const updatePlace = async (req, res, next) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return next(
-      new HttpError("Invalid inputs passed, please check your data.", 422)
-    );
-  }
-
-  const { title, description } = req.body;
-  const placeId = req.params.pid;
-
-  let place;
-  try {
-    place = await Place.findById(placeId);
-  } catch (err) {
-    const error = new HttpError(
-      "Something went wrong, could not update place.",
-      500
-    );
-    return next(error);
-  }
-
-  if (place.creator.toString() !== req.userData.userId) {
-    const error = new HttpError("You are not allowed to edit this place.", 401);
-    return next(error);
-  }
-
-  place.title = title;
-  place.description = description;
-
-  try {
-    await place.save();
-  } catch (err) {
-    const error = new HttpError(
-      "Something went wrong, could not update place.",
-      500
-    );
-    return next(error);
-  }
-
-  res.status(200).json({ place: place.toObject({ getters: true }) });
-};
-
-const deletePlace = async (req, res, next) => {
-  const placeId = req.params.pid;
-
-  let place;
-  try {
-    place = await Place.findById(placeId).populate("creator");
-  } catch (err) {
-    const error = new HttpError(
-      "Something went wrong, could not delete place.",
-      500
-    );
-    return next(error);
-  }
-
-  if (place.creator.id !== req.userData.userId) {
-    const error = new HttpError(
-      "You are not allowed to delete this place.",
-      401
-    );
-    return next(error);
-  }
-
-  if (!place) {
-    const error = new HttpError("Could not find place for this id.", 404);
-    return next(error);
-  }
-
-  const imagePath = place.image;
-
-  try {
-    const sess = await mongoose.startSession();
-    sess.startTransaction();
-    await place.deleteOne({ session: sess });
-    place.creator.places.pull(place);
-    await place.creator.save({ session: sess });
-    await sess.commitTransaction();
-  } catch (err) {
-    const error = new HttpError(
-      "Something went wrong, could not delete place.",
-      500
-    );
-    return next(error);
-  }
-  fs.unlink(imagePath, (err) => console.log(err));
-
-  res.status(200).json({ message: "Deleted place." });
-};
-
-exports.getPlaceById = getPlaceById;
-exports.getPlacesByUserId = getPlacesByUserId;
-exports.createPlace = createPlace;
-exports.updatePlace = updatePlace;
-exports.deletePlace = deletePlace;
+export default NewPlace;

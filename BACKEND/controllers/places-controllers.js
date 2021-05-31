@@ -49,11 +49,11 @@ const getPlacesByUserId = async (req, res, next) => {
   }
 
   // if (!places || places.length === 0) {
-  if (!userWithPlaces || userWithPlaces.places.length === 0) {
-    return next(
-      new HttpError("Could not find places for the provided user id.", 404)
-    );
-  }
+  // if (!userWithPlaces || userWithPlaces.places.length === 0) {
+  //   return next(
+  //     new HttpError("Could not find places for the provided user id.", 404)
+  //   );
+  // }
 
   res.json({
     places: userWithPlaces.places.map((place) =>
@@ -78,7 +78,7 @@ const createPlace = async (req, res, next) => {
   } catch (error) {
     return next(error);
   }
-
+  console.log(coordinates);
   const createdPlace = new Place({
     title,
     description,
